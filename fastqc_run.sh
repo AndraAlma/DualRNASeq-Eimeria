@@ -3,7 +3,7 @@
 
 for FILE_PATH in "$@"
 do
-    GROUP_NAME=$(echo ${FILE_PATH} | cut -d '/' -f 3)
+    GROUP_NAME=$(echo ${FILE_PATH} | cut -d '/' -f 2)
     mkdir -p results/fastqc/${GROUP_NAME} 
     fastqc -o results/fastqc/${GROUP_NAME} ${FILE_PATH}/*.fastq.gz
     multiqc -o results/fastqc/${GROUP_NAME} results/fastqc/${GROUP_NAME}

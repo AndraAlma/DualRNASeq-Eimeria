@@ -12,4 +12,4 @@ module load bioinfo-tools
 module load star/2.7.2b
 
 # Your commands
-bash scripts/star_index.sh data/reference/merged_reference.fna data/reference/merged_reference.gtf
+bash scripts/star_index.sh data/reference/merged_reference.fna data/reference/fixed_copy.gtf
