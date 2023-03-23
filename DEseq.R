@@ -1,7 +1,7 @@
 #To load in all the correct stuff:
 
 install.packages("BiocManager")
-BiocManager::install("gplots")
+BiocManager::install("ggbreak")
 library("DESeq2")
 library("ggbiplot")
 library("ggplot2")
@@ -15,6 +15,8 @@ library("ClassDiscovery")
 library("RColorBrewer")
 library("gplots")
 library("devtools")
+library("KEGGREST")
+library("ggbreak")
 install_github("vqv/ggbiplot")
 
 
@@ -67,44 +69,6 @@ ggbiplot(pca_chicken, var.axes = FALSE) + coord_cartesian(xlim = c(0, 80)) +
   theme(plot.title = element_text(hjust = 0.5))
 
 
-# Check any remaining outliers:
-#df1 <- data.frame(groups=group_chicken,log10_cpm_counts=log(chicken_cpm_raw["CBS",], base = 10))
-#df1_mean <- aggregate(x = df1$log10_cpm_counts, by = list(df1$groups), mean)
-#colnames(df1_mean) <- colnames(df1)
-#df2 <- data.frame(groups=group_chicken,log10_cpm_counts=log(chicken_cpm_raw["EEF1A1",], base = 10))
-#df2_mean <- aggregate(x = df2$log10_cpm_counts, by = list(df2$groups), mean)
-#colnames(df2_mean) <- colnames(df2)
-#df3 <- data.frame(groups=group_chicken,log10_cpm_counts=log(chicken_cpm_raw["ACTB",], base = 10))
-#df3_mean <- aggregate(x = df3$log10_cpm_counts, by = list(df3$groups), mean)
-#colnames(df3_mean) <- colnames(df3)
-#df4 <- data.frame(groups=group_chicken,log10_cpm_counts=log(chicken_cpm_raw["FTH1",], base = 10))
-#df4_mean <- aggregate(x = df4$log10_cpm_counts, by = list(df4$groups), mean)
-#colnames(df4_mean) <- colnames(df4)
-#df5 <- data.frame(groups=group_chicken,log10_cpm_counts=log(chicken_cpm_raw["ACTC2L",], base = 10))
-#df5_mean <- aggregate(x = df5$log10_cpm_counts, by = list(df5$groups), mean)
-#colnames(df5_mean) <- colnames(df5)
-#df6 <- data.frame(groups=group_chicken,log10_cpm_counts=log(chicken_cpm_raw["IGLL1",], base = 10))
-#df6_mean <- aggregate(x = df6$log10_cpm_counts, by = list(df6$groups), mean)
-#colnames(df6_mean) <- colnames(df6)
-
-#ggplot(data=df1_mean, aes(x=groups, y=log10_cpm_counts)) +
-  #geom_bar(stat="identity") +
-  #coord_cartesian(ylim = c(0, 6))
-#ggplot(data=df2_mean, aes(x=groups, y=log10_cpm_counts)) +
-  #geom_bar(stat="identity") +
-  #coord_cartesian(ylim = c(0, 6))
-#ggplot(data=df3_mean, aes(x=groups, y=log10_cpm_counts)) +
-  #geom_bar(stat="identity") +
-  #coord_cartesian(ylim = c(0, 6))
-#ggplot(data=df4_mean, aes(x=groups, y=log10_cpm_counts)) +
-  #geom_bar(stat="identity") +
-  #coord_cartesian(ylim = c(0, 6))
-#ggplot(data=df5_mean, aes(x=groups, y=log10_cpm_counts)) +
-  #geom_bar(stat="identity") +
-  #coord_cartesian(ylim = c(0, 6))
-#ggplot(data=df6_mean, aes(x=groups, y=log10_cpm_counts)) +
-  #geom_bar(stat="identity") +
-  #coord_cartesian(ylim = c(0, 6))
 
 #Filter out low-expressed genes
 chicken_dgelist <- DGEList(counts = chicken_reads[,3:length(chicken_reads)], genes = chicken_reads[,c(1,2)], group = group_chicken)
@@ -207,7 +171,7 @@ timepoints <- c("1_day","2_days","3_days","4_days","10_days")
 plot_list <- list()
 i = 1
 while (i <= length(topgenes_chicken_list)) {
-  volcano_path <- paste("~/exjobb/plots/chicken_volcano_", timepoints[i], ".pdf", sep = "")
+  volcano_path <- paste("~/exjobb/plots/chicken_volcano_lab_", timepoints[i], ".pdf", sep = "")
   pdf(volcano_path, height = 10, width = 16)
   p <- EnhancedVolcano(topgenes_chicken_list[[i]]$table,
                        lab = rownames(topgenes_chicken_list[[i]]$table),
@@ -223,6 +187,46 @@ while (i <= length(topgenes_chicken_list)) {
                        caption = "",
                        pointSize = 4,
                        labSize = 5,
+                       pCutoff = fdr_threshold,
+                       FCcutoff = logfc_threshold) +
+    theme(plot.title = element_text(hjust = 0.5, size = 20),
+          plot.subtitle = element_text(hjust = 0.5, size = 16),
+          legend.text = element_text(size = 16))
+  plot_list[[i]] <- p
+  print(p)
+  dev.off()
+  i = i + 1
+}
+volcano_path <- "~/Exjobb/plots/all_chicken_plots_lab.png"
+png(volcano_path, height = 1200, width = 1200)
+multiplot(plotlist = plot_list, layout = matrix(c(1,2,3,4,5,6), nrow = 3, byrow = TRUE))
+dev.off()
+
+volcano_path <- "~/Exjobb/plots/all_chicken_plots_lab.pdf"
+pdf(volcano_path, height = 20, width = 20)
+multiplot(plotlist = plot_list, layout = matrix(c(1,2,3,4,5,6), nrow = 3, byrow = TRUE))
+dev.off()
+
+
+#Volcano without labels
+i = 1
+while (i <= length(topgenes_chicken_list)) {
+  volcano_path <- paste("~/exjobb/plots/chicken_volcano_", timepoints[i], ".pdf", sep = "")
+  pdf(volcano_path, height = 10, width = 16)
+  p <- EnhancedVolcano(topgenes_chicken_list[[i]]$table,
+                       lab = rownames(topgenes_chicken_list[[i]]$table),
+                       title = timepoints[i],
+                       subtitle = "",
+                       x = 'logFC',
+                       y = 'FDR',
+                       xlim = c(-4,4),
+                       ylim = c(0,7),
+                       ylab = bquote(~-Log[10]~italic(FDR)),
+                       legendLabels = c('NS', expression(Log[2]~FC),
+                                        "FDR", expression(FDR~and~log[2]~FC)),
+                       caption = "",
+                       pointSize = 4,
+                       labSize = 0,
                        pCutoff = fdr_threshold,
                        FCcutoff = logfc_threshold) +
     theme(plot.title = element_text(hjust = 0.5, size = 20),
@@ -291,6 +295,12 @@ de_genes_chicken_all <- lapply(de_genes_chicken, function(x) x[abs(x$logFC) > lo
 unique_chicken_de_genes_pos <- get_unique_and_shared_de_genes(de_genes_chicken_pos, 1)
 unique_chicken_de_genes_neg <- get_unique_and_shared_de_genes(de_genes_chicken_neg, 1)
 unique_chicken_de_genes_all <- get_unique_and_shared_de_genes(de_genes_chicken_all, 1)
+
+chicken_disp <- estimateDisp(chicken_dgelist_filt_norm, design_chicken, robust = TRUE)
+#eimeria_disp <- estimateDisp(eimeria_dgelist_filt_norm, design_eimeria, robust = TRUE)
+
+plotBCV(chicken_disp)
+#plotBCV(eimeria_disp)
 
 # Get a list of all genes that are significantly DE at any timepoint and a list of those that are DE and have a logFC > 1
 egGENENAME <- toTable(org.Gg.egGENENAME)
@@ -400,15 +410,15 @@ heatmap_path <- "~/Exjobb/plots/chicken_genes_logfc.pdf"
 pdf(heatmap_path, width = 240, height = 180, pointsize = 100)
 aspectHeatmap(as.matrix(chicken_logfc_df_filt), Colv = NA,
               xlab = "Timepoints", main = "Chicken gene log fold change", 
-              col = colorRampPalette(brewer.pal(9, "YlOrRd"))(500),
+              col = colorRampPalette(brewer.pal(9, "RdYlGn"))(500),
               hExp = 1, wExp = 1)
 dev.off()
 
 heatmap_path <- "~/Exjobb/plots/chicken_genes_logfc.png"
 png(heatmap_path, height = 1200, width = 1200)
-aspectHeatmap(as.matrix(chicken_fdr_df_filt), Colv = NA,
+aspectHeatmap(as.matrix(chicken_logfc_df_filt), Colv = NA,
               xlab = "Timepoints", main = "Chicken gene log fold change", 
-              col = colorRampPalette(brewer.pal(9, "YlOrRd"))(500),
+              col = colorRampPalette(brewer.pal(9, "RdYlGn"))(500),
               hExp = 1, wExp = 1)
 dev.off()
 
@@ -420,11 +430,7 @@ go_chicken_list <- lapply(chicken_qlf_list,
 #keg <- kegga(chicken_qlf_list, species.KEGG="gga", gene.pathway=GK)
 kegg_chicken_list <- lapply(chicken_qlf_list, 
                             function(x) kegga(x, geneid = chicken_dgelist_filt_norm$genes$entrez_gene_id, FDR = fdr_threshold, species.KEGG = "gga"))
-kegg_chicken_list[[1]]$Pathway <- rownames(kegg_chicken_list[[1]])
-kegg_chicken_list[[2]]$Pathway <- rownames(kegg_chicken_list[[2]])
-kegg_chicken_list[[3]]$Pathway <- rownames(kegg_chicken_list[[3]])
-kegg_chicken_list[[4]]$Pathway <- rownames(kegg_chicken_list[[4]])
-kegg_chicken_list[[5]]$Pathway <- rownames(kegg_chicken_list[[5]])
+
 
 topgo_chicken_up_list <- lapply(go_chicken_list, 
                                 function(x) topGO(x, ont="BP", sort="Up", n=250))
@@ -539,7 +545,7 @@ col_palette <- colorRampPalette(c("red", "white", "blue"))(n = 148)
 heatmap_path <- "~/Exjobb/plots/GO_cat_mixed.pdf"
 pdf(heatmap_path, width = 110, height = 70, pointsize = 60)
 heatmap.2(as.matrix(go_chicken_pval_list_filtered[[3]]), Colv = FALSE, dendrogram = "row", col = col_palette, breaks = col_breaks,
-          xlab = "Timepoints", main = "GO categories",cexRow=0.7,cexCol=1,margins=c(5,12),trace="none",srtCol=45,key = FALSE)
+          xlab = "Timepoints", main = "GO categories",cexRow=0.7,cexCol=1,margins=c(5,12),trace="none",srtCol=45)
 dev.off()
 
 heatmap_path <- "~/Exjobb/plots/KEGG_cat_upregulated.pdf"
@@ -565,47 +571,3 @@ heatmap.2(as.matrix(kegg_chicken_pval_list_filtered[[3]]), Colv = FALSE, dendrog
 dev.off()
 
 
-
-
-
-# OLD
-path_to_metadata_file <- "~/exjobb/almost_full_metadata.csv"
-#read in metadata file
-metadata <- read.delim(path_to_metadata_file, sep = ";", check.names=FALSE, stringsAsFactors=FALSE)
-chicken_metadata <- metadata 
-rownames(chicken_metadata) <- chicken_metadata[,1]
-
-
-
-# create groupings for timepoints
-
-coldata <- DataFrame(group = factor(chicken_metadata$Timepoint))
-
-#Store all the variables and run DESeq2
-ddsHTSeq <- DESeqDataSetFromMatrix(countData = chicken_reads[-c(1,2)], colData = coldata, design = ~group)
-dds <- DESeq(ddsHTSeq)
-
-
-#Get result table & order it
-res <- results(dds)
-resOrdered <- res[order(res$pvalue),]
-resultsNames(ddsHTSeq)
-
-#Check results for p < 0.05
-res05 <- results(dds, alpha=0.05)
-summary(res05)
-sum(res05$padj < 0.05, na.rm=TRUE)
-
-
-# Plot MA
-plotMA(res05, ylim=c(-4,4))
-
-# Plot PCA
-x = vst(ddsHTSeq)
-plotPCA(x, intgroup="group")
-
-
-#Create report with all CDS
-report <- HTMLReport(shortName = 'DiffExp_analysis', title = 'DE_exjobb_chicken', reportDirectory = ".")
-publish(ddsHTSeq, report, pvalueCutoff=0.05, make.plots = TRUE, factor = sampleTable$group, reportDir = ".")
-finish(report)
