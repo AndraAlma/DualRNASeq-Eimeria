@@ -146,7 +146,7 @@ plotBCV(chicken_disp)
 fit_chicken <- glmQLFit(chicken_disp, design_chicken, prior.count = 0.125)
 #plotQLDisp(fit_chicken)
 
-contrasts_chicken <- makeContrasts(Uvs1=group0-group1, Uvs2=group0-group2, Uvs3=group0-group3, Uvs4=group0-group4, Uvs10=group0-group10,
+contrasts_chicken <- makeContrasts(Uvs1=group1-group0, Uvs2=group2-group0, Uvs3=group3-group0, Uvs4=group4-group0, Uvs10=group10-group0,
                                    levels = design_chicken)
 
 #qlf_chicken_B_vs_1 <- glmQLFTest(fit_chicken, coef = 2:7)
@@ -295,6 +295,7 @@ de_genes_chicken_all <- lapply(de_genes_chicken, function(x) x[abs(x$logFC) > lo
 unique_chicken_de_genes_pos <- get_unique_and_shared_de_genes(de_genes_chicken_pos, 1)
 unique_chicken_de_genes_neg <- get_unique_and_shared_de_genes(de_genes_chicken_neg, 1)
 unique_chicken_de_genes_all <- get_unique_and_shared_de_genes(de_genes_chicken_all, 1)
+
 
 chicken_disp <- estimateDisp(chicken_dgelist_filt_norm, design_chicken, robust = TRUE)
 #eimeria_disp <- estimateDisp(eimeria_dgelist_filt_norm, design_eimeria, robust = TRUE)

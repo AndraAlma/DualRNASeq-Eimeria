@@ -18,10 +18,14 @@ stats_230119 <- merge(stats_230119,chicken_metadata, by.x = "File_name", by.y = 
 stats_pilot <- merge(stats_pilot,chicken_metadata, by.x = "File_name", by.y = "File_name")
 
 tot_stats <- rbind(stats_221221, stats_221111, stats_221228, stats_230119, stats_pilot)
+path_to_stats <- "~/exjobb/tot_stats.csv"
+
+tot_stats <- read.delim(path_to_stats, sep = ";", check.names=FALSE, stringsAsFactors=FALSE)
+
 
 plot(tot_stats$Timepoint, tot_stats$Percentage_of_Eimeria_reads, xaxt = "n", col= tot_stats$`Sample date`)
 axis(1, at=0:4, labels=0,1,2,3,4,10)
-df2 <- data.frame(x = tot_stats$Timepoint , y = tot_stats$Percentage_of_Eimeria_reads, z=tot_stats$`Sample date`)
+df2 <- data.frame(x = tot_stats$Timepoint , y = tot_stats$Percentage_of_Eimeria_reads, z=tot_stats$Chicken_nr)
 df2$z <- as.factor(df2$z)
 
 
@@ -41,13 +45,13 @@ dev.off()
 plot_path <- "~/Exjobb/plots/Eim_frac_col.png"
 png(plot_path, height = 600, width = 800, pointsize = 16)
 ggplot(df2, aes(x, y, color=z)) +
-  geom_point(size = 3) +
+  geom_point(size = 4) +
   scale_x_break(c(4, 9.5))+
   xlim(0, 10.5)+
   scale_x_continuous(breaks = c(0,1,2,3,4,10),limits = c(0, 10.25), labels=c("-3","1","2","3","4","10"))+
   xlab("Timepoint (Day)") + 
   ylab("% Eimeria reads")+
-  scale_fill_brewer(palette="Dark2")
+  scale_fill_brewer(palette="Accent")
 dev.off()
  
   
