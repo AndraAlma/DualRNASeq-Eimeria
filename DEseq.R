@@ -17,6 +17,11 @@ library("RColorBrewer")
 library("gplots")
 library("devtools")
 library("KEGGREST")
+library("WGCNA")
+library("ComplexHeatmap")
+library("magrittr")
+library("ggforce")
+library("readr")
 library("ggbreak")
 install_github("vqv/ggbiplot")
 
@@ -165,7 +170,7 @@ chicken_qlf_list <- list(qlf_chicken_Uvs1,qlf_chicken_Uvs2,qlf_chicken_Uvs3,qlf_
                          qlf_chicken_Uvs10)
 topgenes_chicken_list <- lapply(chicken_qlf_list,
                                 function(x) topTags(x, n = dim(chicken_qlf_list[[1]]$table)[1]))
-
+ 
 
 # Define FDR & logFC threshold for significance:
 fdr_threshold <- 0.05
@@ -595,4 +600,387 @@ heatmap.2(as.matrix(kegg_chicken_pval_list_filtered[[3]]), Colv = FALSE, dendrog
           xlab = "Timepoints", main = "KEGG categories",cexRow=0.7,cexCol=1,margins=c(5,12),trace="none",srtCol=45)
 dev.off()
 
+
+
+# WGCNA gene network analysis
+
+options(stringsAsFactors = FALSE)
+chicken_expr <- t(cpm(chicken_dgelist_filt_norm))
+
+gsg = goodSamplesGenes(chicken_expr, verbose = 3)
+gsg$allOK
+
+if (!gsg$allOK) {
+  # Optionally, print the gene and sample names that were removed:
+  if (sum(!gsg$goodGenes)>0) 
+    printFlush(paste("Removing genes:", paste(names(datExpr0)[!gsg$goodGenes], collapse = ", ")))
+  if (sum(!gsg$goodSamples)>0) 
+    printFlush(paste("Removing samples:", paste(rownames(datExpr0)[!gsg$goodSamples], collapse = ", ")))
+  # Remove the offending genes and samples from the data:
+  datExpr0 = datExpr0[gsg$goodSamples, gsg$goodGenes]
+}
+
+
+
+# Plot sample tree:
+sampleTree = hclust(dist(chicken_expr), method = "average")
+sizeGrWindow(12,9)
+par(cex = 0.6)
+par(mar = c(0,4,2,0))
+plot(sampleTree, main = "Sample clustering to detect outliers", sub="", xlab="", cex.lab = 1.5, 
+     cex.axis = 1.5, cex.main = 2)
+abline(h = 50000, col = "red")
+
+
+# Determine cluster under the treshold line
+clust = cutreeStatic(sampleTree, cutHeight = 50000, minSize = 10)
+table(clust)
+keepSamples = (clust==1)
+chicken_expr_cut = chicken_expr[keepSamples, ]
+nGenes = ncol(chicken_expr_cut)
+nSamples = nrow(chicken_expr_cut)
+
+datExpr <- chicken_expr_cut
+simMatrix <- cor(datExpr)
+names(datExpr) = colnames(chicken_expr_cut);
+rownames(datExpr) = rownames(chicken_expr_cut)
+rm(chicken_expr_cut)
+rm(chicken_cpm)
+
+# Find soft treshold:
+powers = c(c(1:10), seq(from = 11, to=20, by=1))
+sft = pickSoftThreshold(datExpr, powerVector = powers, verbose = 5)
+
+
+# Plot soft treshold scale independence:
+plot_path <- "plots/WGCNA_soft_tresh.png"
+png(plot_path, height = 600, width = 800, pointsize = 16)
+par(mfrow=c(1,2))
+plot(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2], xlab="Soft Threshold power)", ylab="Scale Free Topology Model Fit,signed R^2", type="n", main = paste("Scale independence"));
+text(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2], labels=powers,col="red");
+abline(h=0.80, col="red")
+#Zoomed in
+plot(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2], xlab="Soft Threshold power)", ylab="Scale Free Topology Model Fit,signed R^2", type="n", main = paste("Scale independence"), ylim=range(0.6,0.95));
+text(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2], labels=powers,col="red");
+abline(h=0.80, col="red")
+dev.off()
+
+
+# Plot mean connectivity:
+plot_path <- "plots/WGCNA_mean_con.png"
+png(plot_path, height = 600, width = 800, pointsize = 16)
+par(mfrow=c(1,2))
+plot(sft$fitIndices[,1], sft$fitIndices[,5], xlab="Soft Threshold (power)", ylab="Mean Connectivity", type="n", main = paste("Mean connectivity"))
+text(sft$fitIndices[,1], sft$fitIndices[,5], labels=powers,col="red")
+# Zoomed in
+plot(sft$fitIndices[,1], sft$fitIndices[,5], xlab="Soft Threshold (power)", ylab="Mean Connectivity", type="n", main = paste("Mean connectivity"), ylim=range(0,500))
+text(sft$fitIndices[,1], sft$fitIndices[,5], labels=powers,col="red")
+dev.off()
+
+
+# Compute adjacency matrices:
+beta <- 11
+adjMatrix <- abs(simMatrix)^beta
+unweightMatrix <- abs(simMatrix>=0.75)*1
+
+
+# Plot Heatmaps of the PCC similarity matrix and the weighted and unweighted adjacency matrices derived from it.
+s1 <- Heatmap(simMatrix[c(1:1000),c(1:1000)])
+s2 <- Heatmap(adjMatrix[c(1:1000),c(1:1000)])
+s3 <- Heatmap(unweightMatrix[c(1:1000),c(1:1000)])
+
+hmlist <- s1 + s2 + s3
+plot_path <- "plots/WGCNA_heatmaps_11.png"
+png(plot_path, height = 600, width = 800, pointsize = 16)
+draw(hmlist)
+dev.off()
+
+rm(unweightMatrix)
+rm(simMatrix)
+rm(adjMatrix)
+
+cor <- WGCNA::cor
+# Run blockwise modules:
+net11 <- blockwiseModules(datExpr, power = 11,
+                          TOMType = "unsigned", minModuleSize = 30,
+                          reassignThreshold = 0, mergeCutHeight = 0.25,
+                          numericLabels = TRUE, pamRespectsDendro = FALSE,
+                          saveTOMs = TRUE,
+                          saveTOMFileBase = "fusionTOM9", 
+                          verbose = 3,
+                          maxBlockSize = 17000)
+
+
+
+table(net11$colors)
+
+sizeGrWindow(12, 9)
+# Convert labels to colors for plotting
+mergedColors = labels2colors(net11$colors)
+# Plot the dendrogram and the module colors underneath
+plot_path <- "plots/WGCNA_modules_block_net.png"
+png(plot_path, height = 600, width = 800, pointsize = 16)
+plotDendroAndColors(net11$dendrograms[[1]], mergedColors[net11$blockGenes[[1]]],
+                    "Module colors",
+                    dendroLabels = FALSE, hang = 0.03,
+                    addGuide = TRUE, guideHang = 0.05)
+
+moduleLabels = net11$colors
+moduleColors = labels2colors(net11$colors)
+
+dev.off()
+
+
+MEs = net11$MEs
+geneTree = net11$dendrograms[[1]]
+
+
+# Set up trait file (needs fixing!!!!):
+annotation <- metadata
+rownames(annotation) <- annotation$File_name
+dim(annotation)
+names(annotation)
+allTraits = annotation[, -c(3, 4)];
+dim(allTraits)
+names(allTraits)
+traitRows = match(rownames(datExpr), allTraits$File_name);
+datTraits = allTraits[traitRows, -1, drop = FALSE];
+rownames(datTraits) = allTraits[traitRows, 1];
+datTraits[,2] <- datTraits[,1]
+datTraits[,3] <- datTraits[,1]
+datTraits[,4] <- datTraits[,1]
+datTraits[,5] <- datTraits[,1]
+datTraits[,6] <- datTraits[,1]
+names(datTraits) <- c("Day0", "Day1", "Day2", "Day3", "Day4", "Day10")
+datTraits[datTraits$Day0==0,1] <- "Day0"
+datTraits[datTraits$Day0!="Day0",1] <- 0
+datTraits[datTraits$Day0=="Day0",1] <- 1
+datTraits[datTraits$Day1==1,2] <- "Day1"
+datTraits[datTraits$Day1!="Day1",2] <- 0
+datTraits[datTraits$Day1=="Day1",2] <- 1
+datTraits[datTraits$Day2==2,3] <- "Day2"
+datTraits[datTraits$Day2!="Day2",3] <- 0
+datTraits[datTraits$Day2=="Day2",3] <- 1
+datTraits[datTraits$Day3==3,4] <- "Day3"
+datTraits[datTraits$Day3!="Day3",4] <- 0
+datTraits[datTraits$Day3=="Day3",4] <- 1
+datTraits[datTraits$Day4==4,5] <- "Day4"
+datTraits[datTraits$Day4!="Day4",5] <- 0
+datTraits[datTraits$Day4=="Day4",5] <- 1
+datTraits[datTraits$Day10==10,6] <- "Day10"
+datTraits[datTraits$Day10!="Day10",6] <- 0
+datTraits[datTraits$Day10=="Day10",6] <- 1
+names(datTraits)
+
+
+
+# Recalculate MEs with color labels
+MEs0 = moduleEigengenes(datExpr, moduleColors)$eigengenes
+MEs = orderMEs(MEs0)
+moduleTraitCor = cor(MEs, datTraits, use = "p", drop=FALSE)
+moduleTraitPvalue = corPvalueStudent(moduleTraitCor, nSamples)
+sizeGrWindow(10,6)
+
+
+# Will display correlations and their p-values
+textMatrix =  paste(signif(moduleTraitCor, 2), "\n(",
+                    signif(moduleTraitPvalue, 1), ")", sep = "");
+#dim(textMatrix) = dim(moduleTraitCor)
+
+
+
+# Display the correlation values within a heatmap plot
+plot_path <- "plots/WGCNA_modules_time_p.png"
+
+png(plot_path, height = 600, width = 1000, pointsize = 18)
+par(mar = c(6, 10, 3, 3));
+labeledHeatmap(Matrix = moduleTraitCor,
+               xLabels = names(datTraits),
+               yLabels = names(MEs),
+               ySymbols = names(MEs),
+               colorLabels = FALSE,
+               colors = blueWhiteRed(50),
+               textMatrix = textMatrix,
+               setStdMargins = FALSE,
+               cex.text = 0.5,
+               zlim = c(-1,1),
+               main = paste("Module-trait relationships"))
+dev.off()
+
+
+annotation <- metadata
+rownames(annotation) <- annotation$File_name
+dim(annotation)
+names(annotation)
+allTraits = annotation[, -c(3, 4)];
+dim(allTraits)
+names(allTraits)
+traitRows = match(rownames(datExpr), allTraits$File_name);
+datTraits_time = allTraits[traitRows, -1, drop = FALSE];
+rownames(datTraits_time) = allTraits[traitRows, 1];
+
+
+modNames = substring(names(MEs), 3)
+
+geneModuleMembership = as.data.frame(cor(datExpr, MEs, use = "p"));
+MMPvalue = as.data.frame(corPvalueStudent(as.matrix(geneModuleMembership), nSamples));
+
+names(geneModuleMembership) = paste("MM", modNames, sep="");
+names(MMPvalue) = paste("p.MM", modNames, sep="");
+
+geneTraitSignificance = as.data.frame(cor(datExpr, datTraits_time, use = "p"));
+GSPvalue = as.data.frame(corPvalueStudent(as.matrix(geneTraitSignificance), nSamples));
+
+names(geneTraitSignificance) = paste("GS.", names(datTraits_time), sep="");
+names(GSPvalue) = paste("p.GS.", names(datTraits_time), sep="");
+
+module = "tan"
+  column = match(module, modNames);
+  moduleGenes = moduleColors==module;
+  
+  sizeGrWindow(7, 7);
+  par(mfrow = c(1,1));
+  verboseScatterplot(abs(geneModuleMembership[moduleGenes, column]),
+                     abs(geneTraitSignificance[moduleGenes,]),
+                     xlab = paste("Module Membership in", module, "module"),
+                     ylab = "Gene significance for timepoint",
+                     main = paste("Module membership vs. gene significance\n"),
+                     cex.main = 1.2, cex.lab = 1.2, cex.axis = 1.2, col = module)
+  
+  
+colnames(datExpr)[moduleColors=="purple"]
+symbol2entrez = match(chicken_dgelist_filt_norm$genes$gene_name, colnames(datExpr))
+  
+# Create the starting data frame
+geneInfo0 <- data.frame(geneSymbol = colnames(datExpr),
+                          EntrezID = chicken_dgelist_filt_norm$genes$entrez_gene_id[],
+                          moduleColor = moduleColors,
+                          geneTraitSignificance,
+                          GSPvalue)
+# Order modules by their significance for time_point
+modOrder <- order(-abs(cor(MEs, datTraits_time, use = "p")));
+  
+# Add module membership information in the chosen order
+for (mod in 1:ncol(geneModuleMembership)) {
+  oldNames = names(geneInfo0)
+  geneInfo0 = data.frame(geneInfo0, geneModuleMembership[, modOrder[mod]], 
+                         MMPvalue[, modOrder[mod]]);
+  names(geneInfo0) = c(oldNames, paste("MM.", modNames[modOrder[mod]], sep=""),
+                       paste("p.MM.", modNames[modOrder[mod]], sep=""))
+}
+
+# Order the genes in the geneInfo variable first by module color, then by geneTraitSignificance
+geneOrder = order(geneInfo0$moduleColor, -abs(geneInfo0$GS.Timepoint));
+geneInfo = geneInfo0[geneOrder, ]
+
+write.csv(geneInfo, file = "tables/geneInfo_fusion.csv", row.names = FALSE)
+
+geneInfo <- read.delim("tables/geneInfo_fusion.csv", sep = ",", stringsAsFactors = FALSE)
+gene_info_mod <- geneInfo
+chicken_product_df <- read.delim("chicken_gene_products.tsv", 
+                                 header = FALSE, col.names = c("gene_name", "product"))
+chicken_product_df <- chicken_product_df[!duplicated(chicken_product_df[,1]),]
+
+egGENENAME <- toTable(org.Gg.egGENENAME)
+gene_info_mod$Gene_name <- egGENENAME[match(gene_info_mod$EntrezID, egGENENAME$gene_id),]$gene_name
+gene_info_mod$Product <- chicken_product_df[match(gene_info_mod$geneSymbol, chicken_product_df$gene_name),]$product
+gene_info_mod$Differentially_expressed <- gene_info_mod$geneSymbol %in% logfc_filt_de_genes_chicken$gene_name
+m <- match(gene_info_mod$geneSymbol, rownames(logfc_filt_de_genes_chicken))
+gene_info_mod[,43:48] <- logfc_filt_de_genes_chicken[m,]
+
+gene_info_mod <- gene_info_mod[,c(1,2,3,40:48,4:39)]
+
+write.csv(gene_info_mod, file = "tables/geneInfo_fusion_annotated.csv", row.names = FALSE)
+
+
+# GO and KEGG analyses of the modules
+
+GOenr = GOenrichmentAnalysis(moduleColors, gene_info_mod$entrez_gene_id, organism = "chicken", nBestP = 10);
+tab = GOenr$bestPTerms[[4]]$enrichment
+write.table(tab, file = "tables/GOEnrichmentTable.csv", sep = ",", quote = TRUE, row.names = FALSE)
+
+
+# Chicken gene to GO
+# GO annotation file from the Gene Ontology Consortium
+path_to_chicken_GO_annotation_file <- "goa_chicken.gaf.gz"
+chicken_go_annotation <- read.delim(path_to_chicken_GO_annotation_file, stringsAsFactors=FALSE, skip = 31, header = FALSE,
+                                    col.names = c("DB", "DB_ID", "Symbol", "Qualifier", "GO_ID", "DB:Reference",
+                                                  "Evidence_code", "With_or_from", "Aspect", "DB_Object_Name",
+                                                  "DB_Object_Synonyms", "DB_Object_type", "Taxon", "Date", "Assigned_by",
+                                                  "Annotation_extension", "Gene_product_form_ID"))
+chicken_go <- chicken_go_annotation[,c(3,5)]
+go_terms <- toTable(GOTERM)
+m <- match(chicken_go$GO_ID, go_terms$go_id)
+chicken_go$Term <- go_terms[m,"Term"]
+module_go_cats <- chicken_go
+
+module_cat_enrichment <- function(geneInfo, annotation, cat_id, num_genes) {
+  # Function for finding the GO enrichment of a module from a WGCNA analysis of chicken and E. tenella data
+  # geneInfo should contain gene symbols and module membership
+  # annotation should contain gene symbols and  either GO category or KEGG pathway membershp for both chicken and E. tenella genes
+  # cat_id is a string that tells what type of categories are being analysed
+  # num_genes is the total number of genes in the analysis
+  categories <- unique(annotation[,2])
+  cat_analysis_results <- as.data.frame(matrix(0, ncol = 5, nrow = length(categories)))
+  colnames(cat_analysis_results) <- c(paste(cat_id, "_", geneInfo[1,2], sep = ""), "Term", "N", "num_in_cat", "P_val")
+  i <- 0
+  while (i < length(categories)) {
+    i <- i + 1
+    genes_in_cat <- annotation[annotation[,2] == categories[i],]
+    N <- dim(genes_in_cat)[1]
+    m <- match(genes_in_cat[,1], geneInfo[,1])
+    x <- length(m[complete.cases(m)])
+    n <- num_genes - N
+    k <- dim(geneInfo)[1]
+    fisher_result <- fisher.test(matrix(c(x, k-x, N-x, n-(k-x)),nrow=2,ncol=2),alternative="greater")
+    cat_results <- data.frame(categories[i], genes_in_cat[1,3], N, x, fisher_result$p.value, stringsAsFactors = FALSE)
+    cat_analysis_results[i,] <- cat_results[1,]
+  }
+  cat_analysis_results <- cat_analysis_results[order(cat_analysis_results$P_val),]
+  return(cat_analysis_results)
+}
+
+geneInfo_mod <- list()
+modNames <- unique(geneInfo$moduleColor)
+i <- 0
+while (i < length(modNames)) {
+  i <- i + 1
+  geneInfo_mod[[i]] <- geneInfo[geneInfo$moduleColor == modNames[i],c(1,3)]
+}
+
+module_go_cats <- lapply(geneInfo_mod, function(x) module_cat_enrichment(x, chicken_go, "GO_ID", dim(geneInfo)[1]))
+
+i <- 0
+while (i < length(module_go_cats)) {
+  i <- i + 1
+  go_file_name <- paste("tables/wgcna_module_go_kegg/", modNames[i], "_module_go_cats.csv", sep = "")
+  write.csv(module_go_cats[[i]], file = go_file_name, row.names = FALSE)
+}
+
+
+# KEGG:
+# Chicken gene to KEGG from KEGGrest
+chicken_pathway_genes <- keggLink("pathway", "gga")
+pathways <- keggList("pathway", "gga")
+
+m <- match(substr(names(chicken_pathway_genes), 5, nchar(names(chicken_pathway_genes))), chicken_dgelist_filt_norm$genes$entrez_gene_id)
+
+
+chicken_kegg_annotation <- data.frame(gene_symbol = chicken_dgelist$genes$gene_name[m],
+                                      kegg_pathway = names(chicken_pathway_genes),
+                                      kegg_term = pathways[match(substr(chicken_pathway_genes, 9, nchar(chicken_pathway_genes)),
+                                                                 substr(names(pathways), 4, nchar(names(pathways))))],
+                                      stringsAsFactors=FALSE)
+
+chicken_kegg_annotation <- chicken_kegg_annotation[complete.cases(chicken_kegg_annotation),]
+kegg_annotation <- chicken_kegg_annotation
+
+module_kegg_cats <- lapply(geneInfo_mod, function(x) module_cat_enrichment(x, kegg_annotation, "KEGG_ID", dim(geneInfo)[1]))
+
+i <- 0
+while (i < length(module_kegg_cats)) {
+  i <- i + 1
+  kegg_file_name <- paste("tables/wgcna_module_go_kegg/", modNames[i], "_module_kegg_cats.csv", sep = "")
+  write.csv(module_kegg_cats[[i]], file = kegg_file_name, row.names = FALSE)
+}
 
