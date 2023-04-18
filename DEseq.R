@@ -1,5 +1,5 @@
 install.packages("BiocManager")
-BiocManager::install("ggbreak")
+BiocManager::install("Polychrome")
 
 #Load in correct packages:
 
@@ -22,10 +22,11 @@ library("ComplexHeatmap")
 library("magrittr")
 library("ggforce")
 library("readr")
+library("VennDiagram")
 library("ggbreak")
 install_github("vqv/ggbiplot")
 
-
+setwd("C:/Users/dansa/Documents/Exjobb")
 # File paths to count & metadata:
 path_to_metadata_file <- "full_metadata.csv"
 path_to_chicken_reads <- "chicken_counts.csv" 
@@ -432,15 +433,16 @@ png(heatmap_path, height = 1200, width = 1200)
 aspectHeatmap(as.matrix(chicken_fdr_df_filt), Colv = NA,
               xlab = "Timepoints", main = "Chicken gene p-values", 
               col = colorRampPalette(brewer.pal(9, "YlOrRd"))(500),
-              hExp = 1, wExp = 1)
+              hExp = 1, wExp = 0.85, cexRow = 1 , cexCol = 1.5, margins=c(8,8))
 dev.off()
 
 heatmap_path <- "plots/chicken_genes_logfc.pdf"
-pdf(heatmap_path, width = 240, height = 180, pointsize = 100)
+pdf(heatmap_path, width = 30, height = 240, pointsize = 100)
+par(mar = c(20, 10, 15, 6));
 aspectHeatmap(as.matrix(chicken_logfc_df_filt), Colv = NA,
               xlab = "Timepoints", main = "Chicken gene log fold change", 
               col = colorRampPalette(brewer.pal(9, "RdYlGn"))(500),
-              hExp = 1, wExp = 1)
+              hExp = 1, wExp = 0.8, cexRow = 1.5 , cexCol = 2)
 dev.off()
 
 heatmap_path <- "plots/chicken_genes_logfc.png"
@@ -448,7 +450,7 @@ png(heatmap_path, height = 1200, width = 1200)
 aspectHeatmap(as.matrix(chicken_logfc_df_filt), Colv = NA,
               xlab = "Timepoints", main = "Chicken gene log fold change", 
               col = colorRampPalette(brewer.pal(9, "RdYlGn"))(500),
-              hExp = 1, wExp = 1)
+              hExp = 1, wExp = 0.85, cexRow = 1 , cexCol = 1.5, margins=c(8,8))
 dev.off()
 
 
@@ -601,8 +603,223 @@ heatmap.2(as.matrix(kegg_chicken_pval_list_filtered[[3]]), Colv = FALSE, dendrog
 dev.off()
 
 
+# Plots of specific genes:
+cyto_chemo <- c("CCL19", "CCL4-2", "CCL26", "IL8L2", "IL8L1", "CNMD")
+IFN_up <- c("ABCB1LA", "LYGL", "LOC107054696", "GVINP1", "GBP", "VSIG1", 
+            "LOC100858381", "BATF3", "IFI6", "IFIT5", "MX1", "RSAD2", "DDX4", 
+            "AMY2A", "USP18", "LOC100858381", "CMPK2", "LY6E", "HBA1", "KCNG3", 
+            "LOC112532459", "VSIG1", "SGCZ", "SLC27A6")
+IFN_down <- c("CDH23", "LOC771422", "CLCF1", "CYP1A1", "LOC112532392", "DNAH1",
+              "LOC112532392", "GPNMB")
+IFN_up_db <- c("ABCB1LA", "LYGL", "LOC107054696", "GVINP1", "GBP", "VSIG1", 
+            "LOC100858381", "BATF3", "IFI6", "IFIT5", "MX1", "RSAD2", "DDX4", 
+            "AMY2A", "USP18", "LOC100858381", "CMPK2", "LY6E", "HBA1", "KCNG3", 
+            "VSIG1", "SLC27A6","DNAH1")
+IFN_down_db <- c("CDH23", "LOC771422", "CLCF1", "CYP1A1", "LOC112532392",
+                 "LOC112532459","SGCZ", "LOC112532392", "GPNMB")
 
-# WGCNA gene network analysis
+
+plot_de_cat_genes <- function(de_cat_genes, experimental_conditions, plot_title, fdr_thresh = 0.05, 
+                              logfc_thresh = 1, num_samples_fdr_thresh = 1, num_samples_logfc_thresh = 1,
+                              cat_plot_path, plot_scale = c(-5,4)) {
+  # Produces a line plot of log2 fold change across a set of samples for genes in a specific
+  # GO or KEGG category
+  i <- 1
+  j <- 1
+  de_cat_gene_df <- as.data.frame(matrix(0, 
+                                         ncol = dim(de_cat_genes[[1]])[2], 
+                                         nrow = dim(de_cat_genes[[1]])[1]*length(de_cat_genes)))
+  colnames(de_cat_gene_df) <- colnames(de_cat_genes[[1]])
+  num_conditions <- length(de_cat_genes)
+  num_genes <- dim(de_cat_genes[[1]])[1]
+  while (i <= num_genes) {
+    k <- 1
+    while (k <= num_conditions) {
+      de_cat_gene_df[j,] <- de_cat_genes[[k]][i,]
+      j <- j + 1
+      k <- k + 1
+    }
+    i <- i + 1
+  }
+  
+  below_fdr_threshold <- de_cat_gene_df$FDR < fdr_thresh
+  de_cat_gene_df$below_fdr_threshold <- below_fdr_threshold
+  curr_num_genes <- dim(de_cat_genes[[1]])[1]
+  neg_logfc_thresh <- -logfc_thresh
+  
+  i <- 0
+  while (i < curr_num_genes) {
+    gene_start <- num_conditions*i + 1
+    gene_end <- num_conditions*(i + 1)
+    gene_below_thresh <- FALSE
+    j <- num_conditions*i + 1
+    num_samples_below_fdr_thresh = 0
+    num_samples_above_logfc_thresh = 0
+    while (j <= num_conditions*(i+1)) {
+      if (de_cat_gene_df$below_fdr_threshold[j]) {
+        num_samples_below_fdr_thresh <- num_samples_below_fdr_thresh + 1
+      }
+      if (de_cat_gene_df$logFC[j] >= logfc_thresh || de_cat_gene_df$logFC[j] <= neg_logfc_thresh) {
+        num_samples_above_logfc_thresh <- num_samples_above_logfc_thresh + 1
+      }
+      j <- j + 1
+    }
+    if (num_samples_below_fdr_thresh >= num_samples_fdr_thresh && num_samples_above_logfc_thresh >= num_samples_logfc_thresh) {
+      i <- i + 1
+    } 
+    else {
+      gene_start <- num_conditions*i + 1
+      gene_end <- num_conditions*(i + 1)
+      de_cat_gene_df <- de_cat_gene_df[-c(gene_start:gene_end),]
+    }
+    curr_num_genes <- dim(de_cat_gene_df)[1]/num_conditions
+  }
+  
+  if (curr_num_genes > 20) {
+    # To increase readability, the plot is split into two if there are too many genes being plotted
+    split_vec_1 <- rep(1, curr_num_genes/2)
+    split_vec_2 <- rep(2, curr_num_genes/2)
+    split_vec <- c(split_vec_1, split_vec_1, split_vec_1, split_vec_1, split_vec_1, 
+                   split_vec_2, split_vec_2, split_vec_2, split_vec_2, split_vec_2)
+    if (curr_num_genes*5 > length(split_vec)) {
+      split_vec <- c(split_vec, rep(2, num_conditions))
+    }
+    de_cat_gene_df_list <- split(de_cat_gene_df, split_vec)
+    de_cat_gene_df <- de_cat_gene_df_list[[1]]
+    curr_num_genes <- dim(de_cat_gene_df)[1]/num_conditions
+    
+    de_cat_gene_df$gene_timepoints <- rep(experimental_conditions, curr_num_genes)
+    cat_plot_path <- gsub(".png", "_1.png", cat_plot_path)
+    png(cat_plot_path, width = 1200, height = 800)
+    p <- ggplot(de_cat_gene_df, aes(x=gene_timepoints, y=logFC, group=gene_name)) +
+      geom_line(aes(color = gene_name), size = 1.25) +
+      geom_point(aes(shape=below_fdr_threshold, color = gene_name), size = 5) +
+      scale_shape_manual(values = c(1,17)) +
+      scale_x_discrete(limits=experimental_conditions) +
+      theme_bw() +
+      ggtitle(plot_title) +
+      theme(plot.title = element_text(hjust = 0.5, size = 36),
+            legend.title = element_text(size = 28),
+            legend.text = element_text(size = 20),
+            axis.text = element_text(size = 24),
+            axis.title = element_text(size = 24)) +
+      guides(color = guide_legend(order = 1),
+             shape = guide_legend(order = 2)) +
+      coord_cartesian(ylim = plot_scale, xlim = c(0, 11)) +
+      labs(shape = "Below FDR threshold", color = "Gene symbol") +
+      xlab("Time post-infection [days]") + ylab("log2(Fold change)") +
+      geom_hline(yintercept = 0)
+    print(p)
+    dev.off()
+    cat_plot_path <- gsub("_1.png", "_2.png", cat_plot_path)
+    
+    de_cat_gene_df <- de_cat_gene_df_list[[2]]
+    curr_num_genes <- dim(de_cat_gene_df)[1]/num_conditions
+  }
+  
+  de_cat_gene_df$gene_timepoints <- rep(experimental_conditions, curr_num_genes)
+  png(cat_plot_path, width = 1200, height = 800)
+  p <- ggplot(de_cat_gene_df, aes(x=gene_timepoints, y=logFC, color=gene_name)) +
+    geom_line(aes(color = gene_name), size = 1.25) +
+    geom_point(aes(shape=below_fdr_threshold, color = gene_name), size = 5) +
+    scale_shape_manual(values = c(1,17)) +
+    scale_x_discrete(limits=experimental_conditions) +
+    theme_bw() +
+    ggtitle(plot_title) +
+    theme(plot.title = element_text(hjust = 0.5, size = 36),
+          legend.title = element_text(size = 28),
+          legend.text = element_text(size = 20),
+          axis.text = element_text(size = 24),
+          axis.title = element_text(size = 24)) +
+    guides(color = guide_legend(order = 1),
+           shape = guide_legend(order = 2)) +
+    coord_cartesian(ylim = plot_scale, xlim = c(0, 11)) +
+    labs(shape = "Below FDR threshold", color = "Gene symbol") +
+    xlab("Time post-infection [days]") + ylab("log2(Fold change)") +
+    geom_hline(yintercept = 0)
+  print(p)
+  dev.off()
+}
+
+cat_gene_list <- lapply(topgenes_chicken_list, function(x) x$table[match(cyto_chemo, x$table$gene_name),])
+plot_de_cat_genes(cat_gene_list, c(1,2,3,4,10), "Cytokines & Chemokines", fdr_thresh = fdr_threshold, 
+                  logfc_thresh = logfc_threshold, num_samples_fdr_thresh = 0, num_samples_logfc_thresh = 0,
+                  plot_scale = c(-2.5,2.5), "plots/cyto_chemo_expr.png")
+dev.off()
+cat_gene_list <- lapply(topgenes_chicken_list, function(x) x$table[match(IFN_down, x$table$gene_name),])
+plot_de_cat_genes(cat_gene_list, c(1,2,3,4,10), "IFN genes, downregulated", fdr_thresh = fdr_threshold, 
+                  logfc_thresh = logfc_threshold, num_samples_fdr_thresh = 0, num_samples_logfc_thresh = 0,
+                  plot_scale = c(-6,0), "plots/IFN_down_expr.png")
+dev.off()
+cat_gene_list <- lapply(topgenes_chicken_list, function(x) x$table[match(IFN_up, x$table$gene_name),])
+plot_de_cat_genes(cat_gene_list, c(1,2,3,4,10), "IFN genes, upregulated", fdr_thresh = fdr_threshold, 
+                  logfc_thresh = logfc_threshold, num_samples_fdr_thresh = 0, num_samples_logfc_thresh = 0,
+                  plot_scale = c(-1.5,4), "plots/IFN_up_expr.png")
+dev.off()
+cat_gene_list <- lapply(topgenes_chicken_list, function(x) x$table[match(IFN_down_db, x$table$gene_name),])
+plot_de_cat_genes(cat_gene_list, c(1,2,3,4,10), "IFN genes, downregulated (by DB)", fdr_thresh = fdr_threshold, 
+                  logfc_thresh = logfc_threshold, num_samples_fdr_thresh = 0, num_samples_logfc_thresh = 0,
+                  plot_scale = c(-6,5), "plots/IFN_down_db_expr.png")
+dev.off()
+cat_gene_list <- lapply(topgenes_chicken_list, function(x) x$table[match(IFN_up_db, x$table$gene_name),])
+plot_de_cat_genes(cat_gene_list, c(1,2,3,4,10), "IFN genes, upregulated (by DB)", fdr_thresh = fdr_threshold, 
+                  logfc_thresh = logfc_threshold, num_samples_fdr_thresh = 0, num_samples_logfc_thresh = 0,
+                  plot_scale = c(-2,3.5), "plots/IFN_up_expr_db.png")
+dev.off()
+
+path_to_gene_types <- "tables/logfc_filt_de_genes_chicken_IFNtype.csv" 
+# Read in files:
+gene_types <- read.delim(path_to_gene_types, sep = ";", check.names=FALSE, stringsAsFactors=FALSE)
+
+venn_path <- "plots/IFN_venn.png"
+png(venn_path, height = 1200, width = 1200)
+draw.triple.venn(area1 = nrow(subset(gene_types, typeI == 1)), area2 = 
+                 nrow(subset(gene_types, typeII == 1)), area3 = 
+                 nrow(subset(gene_types, typeIII == 1)), n12 = 
+                 nrow(subset(gene_types, typeI == 1 & typeII == 1)), n23 = 
+                 nrow(subset(gene_types, typeII == 1 & typeIII == 1)), n13 = 
+                 nrow(subset(gene_types, typeI == 1 & typeIII == 1)), n123 = 
+                 nrow(subset(gene_types, typeI == 1 & typeII == 1 & typeIII == 1)), 
+                 category = c("IFN I", "IFN II", "IFN III"), 
+                 lty = "blank", fill = c("skyblue1", "lightgoldenrod3", "palegreen4"),
+                 cex = 3,
+                 fontfamily = "sans",
+                 cat.cex = 2,
+                 cat.default.pos = "outer",
+                 cat.fontfamily = "sans",
+                 rotation.degree = 45)
+dev.off()
+
+venn_path <- "plots/IFN_venn.png"
+png(venn_path, height = 1200, width = 1200)
+draw.triple.venn(area1 = nrow(subset(gene_types, typeI == 1)), area2 = 
+                   nrow(subset(gene_types, typeII == 1)), area3 = 
+                   nrow(subset(gene_types, typeIII == 1)), n12 = 
+                   nrow(subset(gene_types, typeI == 1 & typeII == 1)), n23 = 
+                   nrow(subset(gene_types, typeII == 1 & typeIII == 1)), n13 = 
+                   nrow(subset(gene_types, typeI == 1 & typeIII == 1)), n123 = 
+                   nrow(subset(gene_types, typeI == 1 & typeII == 1 & typeIII == 1)), 
+                 category = c("IFN I", "IFN II", "IFN III"), 
+                 lty = "blank", fill = c("deeppink3", "dodgerblue2", "lavender"),
+                 cex = 3.5,
+                 fontfamily = "sans",
+                 cat.cex = 3.5,
+                 cat.default.pos = "outer",
+                 rotation.degree = 45)
+dev.off()
+
+
+modcol <- gene_types$module_col
+counts <- table(modcol)
+bar_path <- "plots/IFN_module_bar.png"
+png(bar_path, height = 600, width = 600)
+par(mar = c(5, 5, 5, 5))
+barplot(counts, main="IFN-regulated genes in modules",
+        xlab="Module color", ylab="No. genes in module", col = c("blue", "brown",
+        "cyan", "green", "grey", "lightcyan","red", "tan", "turquoise"),
+        cex.main=1.5, cex.lab=1.5, cex.axis=1)
+dev.off()
+# WGCNA gene network analysis 
 
 options(stringsAsFactors = FALSE)
 chicken_expr <- t(cpm(chicken_dgelist_filt_norm))
@@ -848,7 +1065,7 @@ module = "tan"
                      cex.main = 1.2, cex.lab = 1.2, cex.axis = 1.2, col = module)
   
   
-colnames(datExpr)[moduleColors=="purple"]
+colnames(datExpr)[moduleColors=="tan"]
 symbol2entrez = match(chicken_dgelist_filt_norm$genes$gene_name, colnames(datExpr))
   
 # Create the starting data frame
