@@ -1,5 +1,5 @@
 install.packages("BiocManager")
-BiocManager::install("Polychrome")
+BiocManager::install("ggpubr")
 
 #Load in correct packages:
 
@@ -23,10 +23,12 @@ library("magrittr")
 library("ggforce")
 library("readr")
 library("VennDiagram")
+library("ggvenn")
 library("ggbreak")
+library("ggpubr")
 install_github("vqv/ggbiplot")
 
-setwd("C:/Users/dansa/Documents/Exjobb")
+
 # File paths to count & metadata:
 path_to_metadata_file <- "full_metadata.csv"
 path_to_chicken_reads <- "chicken_counts.csv" 
@@ -156,11 +158,10 @@ chicken_disp <- estimateDisp(chicken_dgelist_filt_norm, design_chicken, robust =
 plotBCV(chicken_disp)
 
 
-# Create contrasts for DE:
+# Create contrasts between reference timepoint and all other timepoints for DE:
 fit_chicken <- glmQLFit(chicken_disp, design_chicken, prior.count = 0.125)
 contrasts_chicken <- makeContrasts(Uvs1=group1-group0, Uvs2=group2-group0, Uvs3=group3-group0, Uvs4=group4-group0, Uvs10=group10-group0,
                                    levels = design_chicken)
-
 qlf_chicken_Uvs1 <- glmQLFTest(fit_chicken, contrast = contrasts_chicken[,"Uvs1"])
 qlf_chicken_Uvs2 <- glmQLFTest(fit_chicken, contrast = contrasts_chicken[,"Uvs2"])
 qlf_chicken_Uvs3 <- glmQLFTest(fit_chicken, contrast = contrasts_chicken[,"Uvs3"])
@@ -179,7 +180,7 @@ logfc_threshold <- 1
 
 
 # Create volcano plots for all comparisons:
-timepoints <- c("1_day","2_days","3_days","4_days","10_days")
+timepoints <- c("1_dpi","2_dpi","3_dpi","4_dpi","10_dpi")
 plot_list <- list()
 i = 1
 while (i <= length(topgenes_chicken_list)) {
@@ -241,14 +242,18 @@ while (i <= length(topgenes_chicken_list)) {
                        labSize = 0,
                        pCutoff = fdr_threshold,
                        FCcutoff = logfc_threshold) +
-    theme(plot.title = element_text(hjust = 0.5, size = 20),
+    theme(plot.title = element_text(hjust = 0.5, size = 24),
           plot.subtitle = element_text(hjust = 0.5, size = 16),
-          legend.text = element_text(size = 16))
+          legend.text = element_text(size = 20))
   plot_list[[i]] <- p
   print(p)
   dev.off()
   i = i + 1
 }
+
+# Save plot list for comaprison with primary infection:
+plot_list_secondary <- plot_list 
+
 volcano_path <- "plots/all_chicken_plots.png"
 png(volcano_path, height = 1200, width = 1200)
 multiplot(plotlist = plot_list, layout = matrix(c(1,2,3,4,5,6), nrow = 3, byrow = TRUE))
@@ -339,11 +344,13 @@ while (i < length(de_genes_chicken_all)) {
     logfc_filt_de_genes_chicken <- rbind(logfc_filt_de_genes_chicken, df_temp)
   }
 }
+
 logfc_filt_de_genes_chicken <- logfc_filt_de_genes_chicken[order(logfc_filt_de_genes_chicken$FDR),]
 logfc_filt_de_genes_chicken <- logfc_filt_de_genes_chicken[!duplicated(logfc_filt_de_genes_chicken[,c("gene_name","entrez_gene_id")]),]
 rownames(logfc_filt_de_genes_chicken) <- logfc_filt_de_genes_chicken$gene_name
 logfc_filt_de_genes_chicken$description <- egGENENAME[match(logfc_filt_de_genes_chicken$entrez_gene_id, egGENENAME$gene_id),]$gene_name
 missing <- which(is.na(logfc_filt_de_genes_chicken$description))
+
 i <- 0
 while (i <= length(missing)) {
   logfc_filt_de_genes_chicken$description[missing[i]]<-"NA"
@@ -460,7 +467,6 @@ go_chicken_list <- lapply(chicken_qlf_list,
                           function(x) goana(x, geneid = chicken_dgelist_filt_norm$genes$entrez_gene_id, FDR = fdr_threshold, species = "Gg"))
 kegg_chicken_list <- lapply(chicken_qlf_list, 
                             function(x) kegga(x, geneid = chicken_dgelist_filt_norm$genes$entrez_gene_id, FDR = fdr_threshold, species.KEGG = "gga"))
-
 topgo_chicken_up_list <- lapply(go_chicken_list, 
                                 function(x) topGO(x, ont="BP", sort="Up", n=250))
 topgo_chicken_down_list <- lapply(go_chicken_list, 
@@ -475,7 +481,7 @@ topkegg_chicken_all_list <- lapply(kegg_chicken_list,
                                    function(x) topKEGG(x, n=250))
 
 
-# Print a list of the top 50 lowest p-value categories for each time point
+# Print a list of the top 50 lowest p-value categories for each time point:
 i <- 0
 while (i < length(topgo_chicken_all_list)) {
   i <- i + 1
@@ -603,22 +609,22 @@ heatmap.2(as.matrix(kegg_chicken_pval_list_filtered[[3]]), Colv = FALSE, dendrog
 dev.off()
 
 
-# Plots of specific genes:
+# Plots of specific, identified gene groups:
 cyto_chemo <- c("CCL19", "CCL4-2", "CCL26", "IL8L2", "IL8L1", "CNMD")
 IFN_up <- c("ABCB1LA", "LYGL", "LOC107054696", "GVINP1", "GBP", "VSIG1", 
             "LOC100858381", "BATF3", "IFI6", "IFIT5", "MX1", "RSAD2", "DDX4", 
             "AMY2A", "USP18", "LOC100858381", "CMPK2", "LY6E", "HBA1", "KCNG3", 
             "LOC112532459", "VSIG1", "SGCZ", "SLC27A6")
+# split up in 2 smaller sets:
+IFN_up1 <- c("LYGL", "LY6E", "IFI6", "IFIT5", "RSAD2", "USP18", "MX1", "CMPK2",
+             "AMY2A", "DDX4",  "SLC27A6", "VSIG1")
+IFN_up2 <- c("GBP", "LOC107054696", "GVINP1", "ABCB1LA","SGCZ",
+             "LOC112532459", "LOC100858381", "BATF3", "HBA1")
 IFN_down <- c("CDH23", "LOC771422", "CLCF1", "CYP1A1", "LOC112532392", "DNAH1",
               "LOC112532392", "GPNMB")
-IFN_up_db <- c("ABCB1LA", "LYGL", "LOC107054696", "GVINP1", "GBP", "VSIG1", 
-            "LOC100858381", "BATF3", "IFI6", "IFIT5", "MX1", "RSAD2", "DDX4", 
-            "AMY2A", "USP18", "LOC100858381", "CMPK2", "LY6E", "HBA1", "KCNG3", 
-            "VSIG1", "SLC27A6","DNAH1")
-IFN_down_db <- c("CDH23", "LOC771422", "CLCF1", "CYP1A1", "LOC112532392",
-                 "LOC112532459","SGCZ", "LOC112532392", "GPNMB")
 
 
+# Function to create plots:
 plot_de_cat_genes <- function(de_cat_genes, experimental_conditions, plot_title, fdr_thresh = 0.05, 
                               logfc_thresh = 1, num_samples_fdr_thresh = 1, num_samples_logfc_thresh = 1,
                               cat_plot_path, plot_scale = c(-5,4)) {
@@ -705,7 +711,7 @@ plot_de_cat_genes <- function(de_cat_genes, experimental_conditions, plot_title,
             axis.title = element_text(size = 24)) +
       guides(color = guide_legend(order = 1),
              shape = guide_legend(order = 2)) +
-      coord_cartesian(ylim = plot_scale, xlim = c(0, 11)) +
+      coord_cartesian(ylim = plot_scale, xlim = c(0.25, 10.5)) +
       labs(shape = "Below FDR threshold", color = "Gene symbol") +
       xlab("Time post-infection [days]") + ylab("log2(Fold change)") +
       geom_hline(yintercept = 0)
@@ -719,7 +725,9 @@ plot_de_cat_genes <- function(de_cat_genes, experimental_conditions, plot_title,
   
   de_cat_gene_df$gene_timepoints <- rep(experimental_conditions, curr_num_genes)
   png(cat_plot_path, width = 1200, height = 800)
+  par(mar = c(5, 5, 5, 10))
   p <- ggplot(de_cat_gene_df, aes(x=gene_timepoints, y=logFC, color=gene_name)) +
+    scale_colour_brewer(palette="Paired")+
     geom_line(aes(color = gene_name), size = 1.25) +
     geom_point(aes(shape=below_fdr_threshold, color = gene_name), size = 5) +
     scale_shape_manual(values = c(1,17)) +
@@ -727,13 +735,15 @@ plot_de_cat_genes <- function(de_cat_genes, experimental_conditions, plot_title,
     theme_bw() +
     ggtitle(plot_title) +
     theme(plot.title = element_text(hjust = 0.5, size = 36),
-          legend.title = element_text(size = 28),
-          legend.text = element_text(size = 20),
+          legend.title = element_text(size = 23),
+          legend.text = element_text(size = 18),
+          legend.position = "bottom",
+          legend.box = "vertical",
           axis.text = element_text(size = 24),
           axis.title = element_text(size = 24)) +
     guides(color = guide_legend(order = 1),
            shape = guide_legend(order = 2)) +
-    coord_cartesian(ylim = plot_scale, xlim = c(0, 11)) +
+    coord_cartesian(ylim = plot_scale, xlim = c(0.25, 10.5)) +
     labs(shape = "Below FDR threshold", color = "Gene symbol") +
     xlab("Time post-infection [days]") + ylab("log2(Fold change)") +
     geom_hline(yintercept = 0)
@@ -741,84 +751,31 @@ plot_de_cat_genes <- function(de_cat_genes, experimental_conditions, plot_title,
   dev.off()
 }
 
-cat_gene_list <- lapply(topgenes_chicken_list, function(x) x$table[match(cyto_chemo, x$table$gene_name),])
-plot_de_cat_genes(cat_gene_list, c(1,2,3,4,10), "Cytokines & Chemokines", fdr_thresh = fdr_threshold, 
+
+# Plot each group:
+cat_gene_list_s_cc <- lapply(topgenes_chicken_list, function(x) x$table[match(cyto_chemo, x$table$gene_name),])
+plot_de_cat_genes(cat_gene_list_s_cc, c(1,2,3,4,10), "Cytokines & Chemokines, secondary infection", fdr_thresh = fdr_threshold, 
                   logfc_thresh = logfc_threshold, num_samples_fdr_thresh = 0, num_samples_logfc_thresh = 0,
                   plot_scale = c(-2.5,2.5), "plots/cyto_chemo_expr.png")
-dev.off()
-cat_gene_list <- lapply(topgenes_chicken_list, function(x) x$table[match(IFN_down, x$table$gene_name),])
-plot_de_cat_genes(cat_gene_list, c(1,2,3,4,10), "IFN genes, downregulated", fdr_thresh = fdr_threshold, 
+cat_gene_list_s_d <- lapply(topgenes_chicken_list, function(x) x$table[match(IFN_down, x$table$gene_name),])
+plot_de_cat_genes(cat_gene_list_s_d, c(1,2,3,4,10), "IFN genes downregulated, secondary infection", fdr_thresh = fdr_threshold, 
                   logfc_thresh = logfc_threshold, num_samples_fdr_thresh = 0, num_samples_logfc_thresh = 0,
                   plot_scale = c(-6,0), "plots/IFN_down_expr.png")
-dev.off()
-cat_gene_list <- lapply(topgenes_chicken_list, function(x) x$table[match(IFN_up, x$table$gene_name),])
-plot_de_cat_genes(cat_gene_list, c(1,2,3,4,10), "IFN genes, upregulated", fdr_thresh = fdr_threshold, 
+cat_gene_list_s_u <- lapply(topgenes_chicken_list, function(x) x$table[match(IFN_up, x$table$gene_name),])
+plot_de_cat_genes(cat_gene_list_s_u, c(1,2,3,4,10), "IFN genes upregulated, secondary infection", fdr_thresh = fdr_threshold, 
                   logfc_thresh = logfc_threshold, num_samples_fdr_thresh = 0, num_samples_logfc_thresh = 0,
                   plot_scale = c(-1.5,4), "plots/IFN_up_expr.png")
-dev.off()
-cat_gene_list <- lapply(topgenes_chicken_list, function(x) x$table[match(IFN_down_db, x$table$gene_name),])
-plot_de_cat_genes(cat_gene_list, c(1,2,3,4,10), "IFN genes, downregulated (by DB)", fdr_thresh = fdr_threshold, 
+cat_gene_list_s_u1 <- lapply(topgenes_chicken_list, function(x) x$table[match(IFN_up1, x$table$gene_name),])
+plot_de_cat_genes(cat_gene_list_s_u1, c(1,2,3,4,10), "IFN genes upregulated, secondary infection", fdr_thresh = fdr_threshold, 
                   logfc_thresh = logfc_threshold, num_samples_fdr_thresh = 0, num_samples_logfc_thresh = 0,
-                  plot_scale = c(-6,5), "plots/IFN_down_db_expr.png")
-dev.off()
-cat_gene_list <- lapply(topgenes_chicken_list, function(x) x$table[match(IFN_up_db, x$table$gene_name),])
-plot_de_cat_genes(cat_gene_list, c(1,2,3,4,10), "IFN genes, upregulated (by DB)", fdr_thresh = fdr_threshold, 
+                  plot_scale = c(-1.5,4), "plots/IFN_up_expr_col1.png")
+cat_gene_list_s_u2 <- lapply(topgenes_chicken_list, function(x) x$table[match(IFN_up2, x$table$gene_name),])
+plot_de_cat_genes(cat_gene_list_s_u2, c(1,2,3,4,10), "IFN genes upregulated, secondary infection", fdr_thresh = fdr_threshold, 
                   logfc_thresh = logfc_threshold, num_samples_fdr_thresh = 0, num_samples_logfc_thresh = 0,
-                  plot_scale = c(-2,3.5), "plots/IFN_up_expr_db.png")
-dev.off()
-
-path_to_gene_types <- "tables/logfc_filt_de_genes_chicken_IFNtype.csv" 
-# Read in files:
-gene_types <- read.delim(path_to_gene_types, sep = ";", check.names=FALSE, stringsAsFactors=FALSE)
-
-venn_path <- "plots/IFN_venn.png"
-png(venn_path, height = 1200, width = 1200)
-draw.triple.venn(area1 = nrow(subset(gene_types, typeI == 1)), area2 = 
-                 nrow(subset(gene_types, typeII == 1)), area3 = 
-                 nrow(subset(gene_types, typeIII == 1)), n12 = 
-                 nrow(subset(gene_types, typeI == 1 & typeII == 1)), n23 = 
-                 nrow(subset(gene_types, typeII == 1 & typeIII == 1)), n13 = 
-                 nrow(subset(gene_types, typeI == 1 & typeIII == 1)), n123 = 
-                 nrow(subset(gene_types, typeI == 1 & typeII == 1 & typeIII == 1)), 
-                 category = c("IFN I", "IFN II", "IFN III"), 
-                 lty = "blank", fill = c("skyblue1", "lightgoldenrod3", "palegreen4"),
-                 cex = 3,
-                 fontfamily = "sans",
-                 cat.cex = 2,
-                 cat.default.pos = "outer",
-                 cat.fontfamily = "sans",
-                 rotation.degree = 45)
-dev.off()
-
-venn_path <- "plots/IFN_venn.png"
-png(venn_path, height = 1200, width = 1200)
-draw.triple.venn(area1 = nrow(subset(gene_types, typeI == 1)), area2 = 
-                   nrow(subset(gene_types, typeII == 1)), area3 = 
-                   nrow(subset(gene_types, typeIII == 1)), n12 = 
-                   nrow(subset(gene_types, typeI == 1 & typeII == 1)), n23 = 
-                   nrow(subset(gene_types, typeII == 1 & typeIII == 1)), n13 = 
-                   nrow(subset(gene_types, typeI == 1 & typeIII == 1)), n123 = 
-                   nrow(subset(gene_types, typeI == 1 & typeII == 1 & typeIII == 1)), 
-                 category = c("IFN I", "IFN II", "IFN III"), 
-                 lty = "blank", fill = c("deeppink3", "dodgerblue2", "lavender"),
-                 cex = 3.5,
-                 fontfamily = "sans",
-                 cat.cex = 3.5,
-                 cat.default.pos = "outer",
-                 rotation.degree = 45)
-dev.off()
+                  plot_scale = c(-1.5,4), "plots/IFN_up_expr_col2.png")
 
 
-modcol <- gene_types$module_col
-counts <- table(modcol)
-bar_path <- "plots/IFN_module_bar.png"
-png(bar_path, height = 600, width = 600)
-par(mar = c(5, 5, 5, 5))
-barplot(counts, main="IFN-regulated genes in modules",
-        xlab="Module color", ylab="No. genes in module", col = c("blue", "brown",
-        "cyan", "green", "grey", "lightcyan","red", "tan", "turquoise"),
-        cex.main=1.5, cex.lab=1.5, cex.axis=1)
-dev.off()
+
 # WGCNA gene network analysis 
 
 options(stringsAsFactors = FALSE)
@@ -1109,6 +1066,9 @@ gene_info_mod <- gene_info_mod[,c(1,2,3,40:48,4:39)]
 
 write.csv(gene_info_mod, file = "tables/geneInfo_fusion_annotated.csv", row.names = FALSE)
 
+modules_genes <- read.delim("tables/geneInfo_fusion_annotated.csv", sep = ",", stringsAsFactors = FALSE)
+DE_module_genes <- modules_genes[modules_genes$Differentially_expressed==TRUE ,]
+write.csv(DE_module_genes, file = "tables/geneInfo_fusion_DE.csv", row.names = FALSE)
 
 # GO and KEGG analyses of the modules
 
@@ -1201,3 +1161,42 @@ while (i < length(module_kegg_cats)) {
   write.csv(module_kegg_cats[[i]], file = kegg_file_name, row.names = FALSE)
 }
 
+
+# Read in file with IFN types and modules:
+path_to_gene_types <- "tables/logfc_filt_de_genes_chicken_IFNtype.csv" 
+gene_types <- read.delim(path_to_gene_types, sep = ";", check.names=FALSE, stringsAsFactors=FALSE)
+
+
+# Plot venn diagram of IFN types:
+venn_path <- "plots/IFN_venn.png"
+png(venn_path, height = 1200, width = 1200)
+draw.triple.venn(area1 = nrow(subset(gene_types, typeI == 1)), area2 = 
+                   nrow(subset(gene_types, typeII == 1)), area3 = 
+                   nrow(subset(gene_types, typeIII == 1)), n12 = 
+                   nrow(subset(gene_types, typeI == 1 & typeII == 1)), n23 = 
+                   nrow(subset(gene_types, typeII == 1 & typeIII == 1)), n13 = 
+                   nrow(subset(gene_types, typeI == 1 & typeIII == 1)), n123 = 
+                   nrow(subset(gene_types, typeI == 1 & typeII == 1 & typeIII == 1)), 
+                 category = c("IFN I", "IFN II", "IFN III"), 
+                 euler.d = FALSE,
+                 scaled = FALSE,
+                 lty = "blank", fill = c("olivedrab3", "dodgerblue2", "coral2"),
+                 cex = 3.5,
+                 fontfamily = "sans",
+                 cat.cex = 3.5,
+                 cat.default.pos = "outer",
+                 rotation.degree = 45)
+dev.off()
+
+
+# Bar plot of IFN genes in modules:
+modcol <- gene_types$module_col
+counts <- table(modcol)
+bar_path <- "plots/IFN_module_bar.png"
+png(bar_path, height = 600, width = 600)
+par(mar = c(5, 5, 5, 5))
+barplot(counts, main="IFN-regulated genes in modules",
+        xlab="Module color", ylab="No. genes in module", col = c("blue", "brown",
+        "cyan", "green", "grey", "lightcyan","red", "tan", "turquoise"),
+        cex.main=1.5, cex.lab=1.5, cex.axis=1)
+dev.off()
