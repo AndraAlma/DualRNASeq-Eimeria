@@ -14,3 +14,13 @@ These scripts are used to perform quality control on the data, trimming the read
 
 These scripts are used to index the merged genome, map all reads to the genome and counting the reads.
 
+**star_index** and **star_index_wrapper** indexes the merged reference genome.
+
+**star_run** and **star_run_wrapper** maps the trimmed reads to the genome.
+
+**htseq_run** and **htseq_wrapper** counts all mapped reads.
+
+## Differential Expression
+
+
+

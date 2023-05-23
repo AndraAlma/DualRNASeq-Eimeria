@@ -13,6 +13,6 @@ module load FastQC/0.11.8
 module load MultiQC/1.8
 
 # Your commands
-bash scripts/fastqc_run.sh results/trimmomatic/VJ3440/221111/incomplete
+bash scripts/fastqc_run.sh results/trimmomatic/VJ3440/221111
 
 
