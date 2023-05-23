@@ -1,6 +1,8 @@
 # DualRNASeq-Eimeria
 The folder **scripts** contains all scripts used for pre-processing, mapping, counting and differential expression analysis.
 
+**immune_metadata** includes all file names with sample timepoint and date.
+
 ## Preprocessing
 These scripts are used to perform quality control on the data, trimming the reads and merging the reference genome.
 
