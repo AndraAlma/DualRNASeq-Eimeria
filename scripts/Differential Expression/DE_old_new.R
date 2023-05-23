@@ -110,6 +110,8 @@ write.csv(chicken_cpm_df, file = "tables/old_and_new/chicken_counts_norm.csv")
 
 # Plot PCA:
 pca_cpm_chicken <- prcomp(t(chicken_cpm))
+pca_p <- pca_cpm_chicken
+label_p <- chicken_dgelist_filt_norm$samples$group
 pca_path <- "plots/old_and_new/chicken_pca.png"
 png(pca_path, height = 1000, width = 1000)
 ggbiplot(pca_cpm_chicken, var.axes = FALSE, choices = 1:2, alpha = 1) +
@@ -120,6 +122,7 @@ ggbiplot(pca_cpm_chicken, var.axes = FALSE, choices = 1:2, alpha = 1) +
         axis.title = element_text(size = 14),
         axis.text = element_text(size = 12))
 dev.off()
+
 
 
 # Comparing primary to secondary dataset:
@@ -1292,27 +1295,37 @@ gg8 <- plot_de_cat_genes2(cat_gene_list_s_cc, c(1,2,3,4,10), "Cytokines & Chemok
 cat_plot_path <- "plots/old_and_new/mixed_IFN_up_expr_12.png"
 png(cat_plot_path, width = 2000, height = 2000)
 par(mar = c(5, 5, 5, 10))
-ggarrange(gg1, gg2, gg3, gg4,
-          labels = c("A", "B", "C", "D"),
-          font.label = list(size = 40),
-          ncol = 2, nrow = 2)
+ggarrange(ggarrange(gg2, gg1, labels = c("A", "B"),
+                    font.label = list(size = 40),
+                    ncol = 2, nrow = 1,
+                    common.legend = TRUE,
+                    legend="bottom"),
+          ggarrange(gg4, gg3, labels = c("C", "D"),
+                    font.label = list(size = 40),
+                    ncol = 2, nrow = 1,
+                    common.legend = TRUE,
+                    legend="bottom"),
+          ncol = 1, nrow = 2)
 dev.off()
 cat_plot_path <- "plots/old_and_new/mixed_IFN_down_expr.png"
 png(cat_plot_path, width = 2000, height = 1000)
 par(mar = c(5, 5, 5, 10))
-ggarrange(gg5, gg6, 
+ggarrange(gg6, gg5, 
           labels = c("A", "B"),
           font.label = list(size = 40),
           ncol = 2, nrow = 1,
-          common.legend = TRUE)
+          common.legend = TRUE,
+          legend="bottom")
 dev.off()
 cat_plot_path <- "plots/old_and_new/mixed_cyto_chemo_expr.png"
 png(cat_plot_path, width = 2000, height = 1000)
 par(mar = c(5, 5, 5, 10))
-ggarrange(gg7, gg8,
+ggarrange(gg8, gg7,
           labels = c("A", "B"),
           font.label = list(size = 40),
-          ncol = 2, nrow = 1)
+          ncol = 2, nrow = 1,
+          common.legend = TRUE,
+          legend="bottom")
 dev.off()
 
 
@@ -1323,6 +1336,40 @@ ggarrange(ggarrange(plot_list_primary[[1]], plot_list_primary[[2]],plot_list_pri
                     plot_list_primary[[4]],plot_list_primary[[5]],ncol = 2, nrow = 3),
           ggarrange(plot_list_secondary[[1]],plot_list_secondary[[2]],plot_list_secondary[[3]],
                     plot_list_secondary[[4]],plot_list_secondary[[5]],ncol = 2, nrow = 3),
+          labels = c("A", "B"),
+          font.label = list(size = 46),
+          ncol = 2, nrow = 1)
+dev.off()
+
+# Plot volcanos day by day, side by side for primary & secondary:
+volcano_path <- "plots/old_and_new/all_volcanos2.png"
+png(volcano_path, height = 1900, width = 1400)
+ggarrange(ggarrange(plot_list_primary[[1]], plot_list_primary[[2]],plot_list_primary[[3]],
+                    plot_list_primary[[4]],plot_list_primary[[5]],ncol = 1, nrow = 5),
+          ggarrange(plot_list_secondary[[1]],plot_list_secondary[[2]],plot_list_secondary[[3]],
+                    plot_list_secondary[[4]],plot_list_secondary[[5]],ncol = 1, nrow = 5),
+          labels = c("A", "B"),
+          font.label = list(size = 46),
+          ncol = 2, nrow = 1)
+dev.off()
+# Plot PCA side by side for primary+ secondary vs seconday infection:
+pca_path <- "plots/old_and_new/mixed_pca.png"
+pca_plot_p <- ggbiplot(pca_p, var.axes = FALSE, choices = 1:2, alpha = 1) +
+  geom_text(aes(label = label_p), hjust = 0.5, vjust = -0.5, size = 4.5) +
+  ggtitle("PCA of normalized chicken read counts per sample") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, size = 20),
+        axis.title = element_text(size = 14),
+        axis.text = element_text(size = 12))
+pca_plot_s <- ggbiplot(pca_s, var.axes = FALSE, choices = 1:2, alpha = 1) +
+  geom_text(aes(label = label_s), hjust = 0.5, vjust = -0.5, size = 4.5) +
+  ggtitle("PCA of normalized chicken read counts per sample") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, size = 20),
+        axis.title = element_text(size = 14),
+        axis.text = element_text(size = 12))
+png(pca_path, height = 1200, width = 2400)
+ggarrange(pca_plot_p, pca_plot_s,
           labels = c("A", "B"),
           font.label = list(size = 46),
           ncol = 2, nrow = 1)
@@ -1484,34 +1531,6 @@ datTraits[datTraits$Day10==10,6] <- "Day10"
 datTraits[datTraits$Day10!="Day10",6] <- 0
 datTraits[datTraits$Day10=="Day10",6] <- 1
 names(datTraits)
-
-# For both datasets:
-#names(datTraits) <- c("p.day0", "p.day1", "p.day2", "p.day3", "p.day4", "p.day10",
-                      #s.day0", "s.day1", "s.day2", "s.day3", "s.day4", "s.day10")
-#datTraits[datTraits$p.day0 == "p.0",1]=1
-#datTraits[datTraits$p.day0 != "1",1]=0
-#datTraits[datTraits$p.day1 == "p.1",2]=1
-#datTraits[datTraits$p.day1 != "1",2]=0
-#datTraits[datTraits$p.day2 == "p.2",3]=1
-#datTraits[datTraits$p.day2 != "1",3]=0
-#datTraits[datTraits$p.day3 == "p.3",4]=1
-#datTraits[datTraits$p.day3 != "1",4]=0
-#datTraits[datTraits$p.day4 == "p.4",5]=1
-#datTraits[datTraits$p.day4 != "1",5]=0
-#datTraits[datTraits$p.day10 == "p.10",6]=1
-#datTraits[datTraits$p.day10 != "1",6]=0
-#datTraits[datTraits$s.day0 == "s.0",7]=1
-#datTraits[datTraits$s.day0 != "1",7]=0
-#datTraits[datTraits$s.day1 == "s.1",8]=1
-#datTraits[datTraits$s.day1 != "1",8]=0
-#datTraits[datTraits$s.day2 == "s.2",9]=1
-#datTraits[datTraits$s.day2 != "1",9]=0
-#datTraits[datTraits$s.day3 == "s.3",10]=1
-#datTraits[datTraits$s.day3 != "1",10]=0
-#datTraits[datTraits$s.day4 == "s.4",11]=1
-#datTraits[datTraits$s.day4 != "1",11]=0
-#datTraits[datTraits$s.day10 == "s.10",12]=1
-#datTraits[datTraits$s.day10 != "1",12]=0
 
 
 # Recalculate MEs with color labels:

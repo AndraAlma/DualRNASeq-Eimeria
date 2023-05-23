@@ -137,6 +137,8 @@ write.csv(chicken_cpm_df, file = "tables/chicken_counts_norm.csv")
 
 # Plot PCA:
 pca_cpm_chicken <- prcomp(t(chicken_cpm))
+pca_s <- pca_cpm_chicken
+label_s <- chicken_dgelist_filt_norm$samples$group
 pca_path <- "plots/chicken_pca.png"
 png(pca_path, height = 500, width = 520)
 ggbiplot(pca_cpm_chicken, var.axes = FALSE, choices = 1:2, alpha = 1) +
@@ -148,6 +150,23 @@ ggbiplot(pca_cpm_chicken, var.axes = FALSE, choices = 1:2, alpha = 1) +
         axis.text = element_text(size = 12))
 dev.off()
 
+# With colors:
+pca_path <- "plots/chicken_pca2.png"
+png(pca_path, height = 800, width = 800)
+ggbiplot(pca_cpm_chicken, var.axes = FALSE, choices = 1:2, alpha = 1) +
+  geom_text(aes(label = chicken_dgelist_filt_norm$samples$group), hjust = 0.5, vjust = -0.5, size = 5) +
+  ggtitle("PCA of normalized chicken read counts per sample") +
+  geom_point(aes(colour=chicken_dgelist_filt_norm$samples$group), size = 4) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, size = 20),
+        axis.title = element_text(size = 14),
+        axis.text = element_text(size = 12),
+        legend.direction ="vertical", 
+        legend.position = "right",
+        legend.title = element_text(size = 14),
+        legend.text = element_text(size = 12))+
+  scale_color_manual(name="Timepoint", labels=c("0 dpi", "1 dpi", "2 dpi", "3 dpi", "4 dpi", "10 dpi"), values=c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99", "#E31A1C"))
+dev.off()
 
 # Create design matrix:
 chicken_dgelist_filt_norm$samples$group <- relevel(chicken_dgelist_filt_norm$samples$group, ref="0")
@@ -1167,7 +1186,7 @@ path_to_gene_types <- "tables/logfc_filt_de_genes_chicken_IFNtype.csv"
 gene_types <- read.delim(path_to_gene_types, sep = ";", check.names=FALSE, stringsAsFactors=FALSE)
 
 
-# Plot venn diagram of IFN types:
+# Plot venn diagram of IFN types: 
 venn_path <- "plots/IFN_venn.png"
 png(venn_path, height = 1200, width = 1200)
 draw.triple.venn(area1 = nrow(subset(gene_types, typeI == 1)), area2 = 
@@ -1187,7 +1206,25 @@ draw.triple.venn(area1 = nrow(subset(gene_types, typeI == 1)), area2 =
                  cat.default.pos = "outer",
                  rotation.degree = 45)
 dev.off()
-
+venn_path <- "plots/IFN_venn3.png"
+png(venn_path, height = 1200, width = 1200)
+draw.triple.venn(area1 = nrow(subset(gene_types, typeI == 1)), area2 = 
+                   nrow(subset(gene_types, typeII == 1)), area3 = 
+                   nrow(subset(gene_types, typeIII == 1)), n12 = 
+                   nrow(subset(gene_types, typeI == 1 & typeII == 1)), n23 = 
+                   nrow(subset(gene_types, typeII == 1 & typeIII == 1)), n13 = 
+                   nrow(subset(gene_types, typeI == 1 & typeIII == 1)), n123 = 
+                   nrow(subset(gene_types, typeI == 1 & typeII == 1 & typeIII == 1)), 
+                 category = c("IFN I", "IFN II", "IFN III"), 
+                 euler.d = FALSE,
+                 scaled = FALSE,
+                 lty = "blank", fill = c("lightsalmon1", "turquoise", "mediumorchid1"),
+                 cex = 3.5,
+                 fontfamily = "sans",
+                 cat.cex = 3.5,
+                 cat.default.pos = "outer",
+                 rotation.degree = 45)
+dev.off()
 
 # Bar plot of IFN genes in modules:
 modcol <- gene_types$module_col
