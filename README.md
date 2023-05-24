@@ -26,8 +26,6 @@ These scripts are used to index the merged genome, map all reads to the genome a
 
 **read_count_process** splits up read counts into two datasets (parasite and chicken) and summarizes the paired and unpaired counts for each sample.
 
-**read_count_process_old** functions the same but is used for the old dataset with different sample names.
-
 **read_count_concat** Concatenates the processed reads into one read count matrix including all samples.
 
 **DEseq** Carries out read count normalization, differential expression analysis, GO and KEGG pathway enrichment, plots expression of specific identified gene groups and a WGCNA gene network analysis on the immune chicken dataset. Also saves some data in variables to plot old and new data side by side.
